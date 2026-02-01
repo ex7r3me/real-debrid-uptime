@@ -4,3 +4,5 @@ data/
 frontend/dist/
 .env
 *.log
+hetzner_deploy_key
+hetzner_deploy_key.pub

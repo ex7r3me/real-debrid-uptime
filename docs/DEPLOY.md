@@ -6,7 +6,19 @@ This project uses **GitHub Actions** for CI (lint + build on every push/PR) and 
 
 ### Option A: Automated script (easiest)
 
-SSH into your server, clone the repo, then run the setup script:
+SSH into your server **as root or a sudo user**, clone the repo, then run the setup script.
+
+**With a dedicated deploy user (recommended):**
+
+```bash
+git clone https://github.com/ex7r3me/real-debrid-uptime.git /var/www/real-debrid-uptime
+cd /var/www/real-debrid-uptime
+CREATE_DEPLOY_USER=1 ./scripts/setup-hetzner.sh
+```
+
+This creates a system user `deploy`, gives it ownership of the app directory, and runs the app under that user. GitHub Actions will SSH as `deploy` and run deploys.
+
+**Without a dedicated user (use your current user):**
 
 ```bash
 git clone https://github.com/ex7r3me/real-debrid-uptime.git /var/www/real-debrid-uptime
@@ -16,6 +28,7 @@ cd /var/www/real-debrid-uptime
 
 The script will:
 
+- **(If `CREATE_DEPLOY_USER=1`)** Create user `deploy` (or `DEPLOY_USER`), set up `~/.ssh` for that user, and chown the repo to it
 - Install Node.js 20 and git (Debian/Ubuntu)
 - Run `npm ci` and `npm run build:all`
 - Create `.env` from `.env.example` and prompt for your Real-Debrid API key
@@ -25,10 +38,60 @@ The script will:
 Override defaults with env vars (optional):
 
 ```bash
-APP_USER=app PORT=3000 ./scripts/setup-hetzner.sh
+DEPLOY_USER=app CREATE_DEPLOY_USER=1 ./scripts/setup-hetzner.sh
+APP_USER=myuser PORT=3000 ./scripts/setup-hetzner.sh   # no dedicated user
 ```
 
-Then add your GitHub Actions SSH public key to `~/.ssh/authorized_keys` for the user that will deploy (same as `APP_USER` if you set it), and configure [GitHub secrets](#2-github-repository-configuration) below.
+Then set up **key management** (below) and [GitHub secrets](#2-github-repository-configuration).
+
+---
+
+### User and key management
+
+**1. Deploy user**
+
+- **Recommended:** Use `CREATE_DEPLOY_USER=1` so the app and deploys run as a dedicated user (e.g. `deploy`). No shared login; GitHub Actions uses only this user’s SSH key.
+- **Optional:** Use your own SSH user and set `HETZNER_USER` to that; ensure that user can `sudo systemctl restart real-debrid-uptime` (the setup script adds the sudoers rule for `APP_USER`).
+
+**2. Generate a deploy key (on your machine)**
+
+Run from the repo root:
+
+```bash
+./scripts/setup-deploy-key.sh
+```
+
+This creates an Ed25519 key pair (default: `./hetzner_deploy_key` and `./hetzner_deploy_key.pub`) and prints:
+
+- The exact line to add the **public** key on the server (for the deploy user’s `~/.ssh/authorized_keys`)
+- How to add the **private** key as the GitHub secret `HETZNER_SSH_KEY`
+
+**3. Add the public key on the server**
+
+On the Hetzner server, as the user that will run deploys (e.g. `deploy`):
+
+```bash
+# If using dedicated user (e.g. deploy):
+sudo -u deploy bash -c 'echo "PASTE_PUBLIC_KEY_HERE" >> ~/.ssh/authorized_keys'
+
+# If using your own user:
+echo "PASTE_PUBLIC_KEY_HERE" >> ~/.ssh/authorized_keys
+```
+
+**4. Add the private key in GitHub**
+
+- Repo → **Settings** → **Secrets and variables** → **Actions**
+- **New repository secret** → Name: `HETZNER_SSH_KEY`, Value: entire contents of `hetzner_deploy_key` (the private key file)
+- Never commit the private key; you can delete it from your machine after adding it to GitHub if you prefer.
+
+**5. GitHub secrets to set**
+
+| Secret | Description |
+|--------|-------------|
+| `HETZNER_HOST` | Server hostname or IP |
+| `HETZNER_USER` | SSH user (e.g. `deploy` if you used `CREATE_DEPLOY_USER=1`) |
+| `HETZNER_SSH_KEY` | Full body of the **private** deploy key |
+| `HETZNER_DEPLOY_PATH` | (Optional) App path on server, e.g. `/var/www/real-debrid-uptime` |
 
 ### Option B: Manual steps
 
@@ -113,15 +176,9 @@ sudo systemctl start real-debrid-uptime
 sudo systemctl status real-debrid-uptime
 ```
 
-### Allow GitHub Actions to run deploy commands
+### Allow GitHub Actions to run deploy commands (manual setup)
 
-The workflow will SSH in, `git pull`, build, and restart the service. The user that GitHub uses must:
-
-1. Be able to `cd` into the repo and run `git fetch` / `git reset --hard`.
-2. Be able to run `npm ci` and `npm run build:all` in that directory.
-3. Be able to run `sudo systemctl restart real-debrid-uptime` without a password.
-
-Option A – use your own user and give it passwordless sudo for that one command:
+The workflow will SSH in, `git pull`, build, and restart the service. The user that GitHub uses must be able to `cd` into the repo, run `npm ci` and `npm run build:all`, and run `sudo systemctl restart real-debrid-uptime` without a password. The automated script adds the sudoers rule for you; if you set up manually, add:
 
 ```bash
 sudo visudo
@@ -129,41 +186,9 @@ sudo visudo
 deploy ALL=(ALL) NOPASSWD: /bin/systemctl restart real-debrid-uptime
 ```
 
-Option B – run the app as the same user that SSH deploys (e.g. `deploy`). Then that user owns the repo and runs the app; you only need the sudo rule above for `systemctl restart`.
-
-### SSH key for GitHub Actions
-
-On your **local machine** (or server), generate a key used only for deploys:
-
-```bash
-ssh-keygen -t ed25519 -C "github-actions-deploy" -f hetzner_deploy_key -N ""
-```
-
-- Add the **public** key to the server:
-
-  ```bash
-  # Copy hetzner_deploy_key.pub to server, then on server:
-  mkdir -p ~/.ssh
-  cat >> ~/.ssh/authorized_keys << 'EOF'
-  <paste contents of hetzner_deploy_key.pub>
-  EOF
-  chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys
-  ```
-
-- Add the **private** key to GitHub (see below). Never commit it.
-
 ## 2. GitHub repository configuration
 
-### Required secrets
-
-In the repo: **Settings → Secrets and variables → Actions**, add:
-
-| Secret                | Description |
-|-----------------------|-------------|
-| `HETZNER_HOST`        | Server hostname or IP (e.g. `123.45.67.89` or `monitor.example.com`). |
-| `HETZNER_USER`        | SSH user (e.g. `deploy` or `app`). |
-| `HETZNER_SSH_KEY`     | Full contents of the **private** key file (e.g. `hetzner_deploy_key`). |
-| `HETZNER_DEPLOY_PATH` | (Optional) Path to the repo on the server. Default: `/var/www/real-debrid-uptime`. |
+The required secrets are listed in [User and key management](#user-and-key-management) above. Add them under **Settings → Secrets and variables → Actions**.
 
 ### Optional: use an environment
 

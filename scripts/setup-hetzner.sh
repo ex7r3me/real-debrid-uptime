@@ -2,6 +2,10 @@
 # One-time setup for Real-Debrid Uptime Monitor on a Hetzner (or any Debian/Ubuntu) server.
 # Run from the repo root (or from anywhere: scripts/setup-hetzner.sh).
 # Requires: sudo (for install, systemd, sudoers).
+#
+# Optional: create a dedicated deploy user and key-based access:
+#   CREATE_DEPLOY_USER=1 ./scripts/setup-hetzner.sh
+#   DEPLOY_USER=app CREATE_DEPLOY_USER=1 ./scripts/setup-hetzner.sh
 
 set -e
 
@@ -9,15 +13,38 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 # --- config (override with env or leave defaults) ---
-APP_USER="${APP_USER:-$USER}"
 PORT="${PORT:-3000}"
 SERVICE_NAME="real-debrid-uptime"
+DEPLOY_USER="${DEPLOY_USER:-deploy}"
+
+if [[ -n "${CREATE_DEPLOY_USER:-}" && "${CREATE_DEPLOY_USER}" != "0" ]]; then
+  APP_USER="$DEPLOY_USER"
+else
+  APP_USER="${APP_USER:-$USER}"
+fi
 
 echo "=== Real-Debrid Uptime – Hetzner setup ==="
 echo "Repo root: $REPO_ROOT"
 echo "App user:  $APP_USER"
 echo "Port:      $PORT"
+[[ -n "${CREATE_DEPLOY_USER:-}" && "${CREATE_DEPLOY_USER}" != "0" ]] && echo "Create user: $DEPLOY_USER (dedicated deploy user)"
 echo ""
+
+# --- 0. Create deploy user (optional) ---
+if [[ -n "${CREATE_DEPLOY_USER:-}" && "${CREATE_DEPLOY_USER}" != "0" ]]; then
+  if ! id -u "$DEPLOY_USER" &>/dev/null; then
+    echo ">>> Creating user: $DEPLOY_USER"
+    sudo useradd -m -s /bin/bash "$DEPLOY_USER"
+    sudo mkdir -p "/home/$DEPLOY_USER/.ssh"
+    sudo touch "/home/$DEPLOY_USER/.ssh/authorized_keys"
+    sudo chmod 700 "/home/$DEPLOY_USER/.ssh"
+    sudo chmod 600 "/home/$DEPLOY_USER/.ssh/authorized_keys"
+    sudo chown -R "$DEPLOY_USER:$DEPLOY_USER" "/home/$DEPLOY_USER/.ssh"
+    echo ">>> User $DEPLOY_USER created. Add deploy public key to /home/$DEPLOY_USER/.ssh/authorized_keys (see docs or scripts/setup-deploy-key.sh)."
+  else
+    echo ">>> User $DEPLOY_USER already exists."
+  fi
+fi
 
 # --- 1. Node.js 20 (Debian/Ubuntu) ---
 if ! command -v node &>/dev/null; then
@@ -77,6 +104,12 @@ else
   echo ">>> .env already exists; skipping."
 fi
 
+# --- 4b. Chown repo to deploy user (when using dedicated user) ---
+if [[ -n "${CREATE_DEPLOY_USER:-}" && "${CREATE_DEPLOY_USER}" != "0" ]]; then
+  echo ">>> Giving $APP_USER ownership of $REPO_ROOT"
+  sudo chown -R "$APP_USER:$APP_USER" "$REPO_ROOT"
+fi
+
 # --- 5. systemd service ---
 UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 NODE_PATH="$(command -v node)"
@@ -126,11 +159,18 @@ echo "  App:     http://localhost:$PORT"
 echo "  Logs:    sudo journalctl -u $SERVICE_NAME -f"
 echo "  Restart: sudo systemctl restart $SERVICE_NAME"
 echo ""
-echo "=== For GitHub Actions CD (optional) ==="
-echo "  1. Add this server's deploy path to GitHub Secrets:"
-echo "     HETZNER_DEPLOY_PATH=$REPO_ROOT"
-echo "  2. In GitHub repo: Settings → Secrets → Actions, add:"
-echo "     HETZNER_HOST, HETZNER_USER, HETZNER_SSH_KEY"
-echo "  3. On this server, add the deploy key to $APP_USER's authorized_keys:"
-echo "     echo 'PASTE_PUBLIC_KEY' >> ~/.ssh/authorized_keys"
+echo "=== GitHub Actions CD (user & key management) ==="
+echo "  Deploy user: $APP_USER"
+echo "  Deploy path: HETZNER_DEPLOY_PATH=$REPO_ROOT"
+echo ""
+echo "  1. Generate a deploy key (on your machine):"
+echo "     ./scripts/setup-deploy-key.sh"
+echo "  2. On this server, add the PUBLIC key to $APP_USER:"
+if [[ "$APP_USER" != "$USER" ]]; then
+  echo "     sudo -u $APP_USER bash -c \"echo 'PASTE_PUBLIC_KEY' >> ~/.ssh/authorized_keys\""
+else
+  echo "     echo 'PASTE_PUBLIC_KEY' >> ~/.ssh/authorized_keys"
+fi
+echo "  3. In GitHub: Settings → Secrets → Actions, add:"
+echo "     HETZNER_HOST, HETZNER_USER=$APP_USER, HETZNER_SSH_KEY (private key body)"
 echo ""
