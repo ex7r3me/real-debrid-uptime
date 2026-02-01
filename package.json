@@ -9,7 +9,8 @@
     "build:frontend": "cd frontend && npm run build",
     "build:all": "npm run build && npm run build:frontend",
     "start": "node dist/index.js",
-    "dev": "tsc && concurrently -k \"tsc --watch\" \"node --watch dist/index.js\""
+    "dev": "tsc && concurrently -k \"tsc --watch\" \"node --watch dist/index.js\"",
+    "lint": "tsc --noEmit && cd frontend && npm run lint"
   },
   "engines": {
     "node": ">=18"

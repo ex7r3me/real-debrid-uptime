@@ -75,6 +75,13 @@ Use `GET /cache` (with API key in env) to list your cache and pick hashes. See `
 
 Built frontend is served from the same server when you run `npm run build:all` and then `npm run start`.
 
+## CI/CD & Deploy
+
+- **CI**: On every push and PR to `main`, GitHub Actions runs lint and full build.
+- **CD**: On every push to `main`, the workflow deploys to a Hetzner server via SSH (pull → build → restart).
+
+See **[docs/DEPLOY.md](docs/DEPLOY.md)** for one-time Hetzner setup, systemd service, SSH key, and required GitHub secrets (`HETZNER_HOST`, `HETZNER_USER`, `HETZNER_SSH_KEY`, optional `HETZNER_DEPLOY_PATH`).
+
 ## License
 
 MIT
