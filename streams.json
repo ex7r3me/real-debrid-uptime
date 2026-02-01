@@ -1,0 +1,8 @@
+{
+  "apiCheck": true,
+  "streams": [
+    { "id": "tv", "type": "hash", "hash": "86971f0c96e9993dd323ed00da25a4795a42e1ca" },
+    { "id": "movie", "type": "hash", "hash": "f25efb6b18b19306b7efd600cf30c10ff5353554" },
+    { "id": "animation", "type": "hash", "hash": "65a5c679a5092db0e905a090fc871efb6fdb00cd" }
+  ]
+}
