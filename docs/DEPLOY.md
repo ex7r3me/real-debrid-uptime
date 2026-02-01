@@ -4,6 +4,34 @@ This project uses **GitHub Actions** for CI (lint + build on every push/PR) and 
 
 ## 1. One-time setup on the Hetzner server
 
+### Option A: Automated script (easiest)
+
+SSH into your server, clone the repo, then run the setup script:
+
+```bash
+git clone https://github.com/YOUR_USERNAME/real-debrid-uptime.git /var/www/real-debrid-uptime
+cd /var/www/real-debrid-uptime
+./scripts/setup-hetzner.sh
+```
+
+The script will:
+
+- Install Node.js 20 and git (Debian/Ubuntu)
+- Run `npm ci` and `npm run build:all`
+- Create `.env` from `.env.example` and prompt for your Real-Debrid API key
+- Install and start a systemd service (`real-debrid-uptime`)
+- Add a sudoers rule so the deploy user can run `sudo systemctl restart real-debrid-uptime` without a password (for GitHub Actions CD)
+
+Override defaults with env vars (optional):
+
+```bash
+APP_USER=app PORT=3000 ./scripts/setup-hetzner.sh
+```
+
+Then add your GitHub Actions SSH public key to `~/.ssh/authorized_keys` for the user that will deploy (same as `APP_USER` if you set it), and configure [GitHub secrets](#2-github-repository-configuration) below.
+
+### Option B: Manual steps
+
 SSH into your server and do the following.
 
 ### Install Node.js 20 (LTS)

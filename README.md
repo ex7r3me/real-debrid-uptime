@@ -80,7 +80,7 @@ Built frontend is served from the same server when you run `npm run build:all` a
 - **CI**: On every push and PR to `main`, GitHub Actions runs lint and full build.
 - **CD**: On every push to `main`, the workflow deploys to a Hetzner server via SSH (pull → build → restart).
 
-See **[docs/DEPLOY.md](docs/DEPLOY.md)** for one-time Hetzner setup, systemd service, SSH key, and required GitHub secrets (`HETZNER_HOST`, `HETZNER_USER`, `HETZNER_SSH_KEY`, optional `HETZNER_DEPLOY_PATH`).
+See **[docs/DEPLOY.md](docs/DEPLOY.md)** for one-time Hetzner setup. Easiest: clone the repo on the server and run **`./scripts/setup-hetzner.sh`** (installs Node, builds, creates `.env`, installs systemd service). Then add GitHub secrets and your deploy SSH key.
 
 ## License
 
