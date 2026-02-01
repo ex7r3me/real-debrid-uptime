@@ -177,7 +177,6 @@ function HistoryChartAll({
         <LineChart
           data={chartData}
           margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
-          isAnimationActive={false}
         >
           <CartesianGrid strokeDasharray="3 3" stroke="var(--grid)" />
           <XAxis dataKey="time" tick={{ fill: "var(--muted)" }} fontSize={11} />
@@ -203,6 +202,7 @@ function HistoryChartAll({
               strokeWidth={2}
               dot={{ r: 2 }}
               connectNulls
+              isAnimationActive={false}
             />
           ))}
         </LineChart>
