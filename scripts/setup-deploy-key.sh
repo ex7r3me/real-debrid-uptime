@@ -3,11 +3,13 @@
 # Run on your local machine (not on the server). Never commit the private key.
 #
 # Usage: ./scripts/setup-deploy-key.sh [output_key_path]
-# Default key path: ./hetzner_deploy_key (private), ./hetzner_deploy_key.pub (public)
+# Default: ~/.ssh/hetzner_deploy_real_debrid_uptime (outside the repo, safe from accidental commit)
 
 set -e
 
-KEY_PATH="${1:-./hetzner_deploy_key}"
+DEFAULT_KEY="$HOME/.ssh/hetzner_deploy_real_debrid_uptime"
+KEY_PATH="${1:-$DEFAULT_KEY}"
+KEY_PATH="${KEY_PATH/#\~/$HOME}"
 KEY_DIR="$(cd "$(dirname "$KEY_PATH")" && pwd)"
 KEY_NAME="$(basename "$KEY_PATH")"
 KEY_FILE="$KEY_DIR/$KEY_NAME"
@@ -17,6 +19,9 @@ if [[ -f "$KEY_FILE" ]]; then
   echo "Use a different path or remove it first."
   exit 1
 fi
+
+mkdir -p "$KEY_DIR"
+chmod 700 "$KEY_DIR" 2>/dev/null || true
 
 echo ">>> Generating deploy key: $KEY_FILE"
 ssh-keygen -t ed25519 -C "github-actions-deploy-real-debrid-uptime" -f "$KEY_FILE" -N ""
@@ -44,4 +49,8 @@ echo "   cat $KEY_FILE | pbcopy"
 echo ""
 echo "3. Set GitHub secrets: HETZNER_HOST, HETZNER_USER (deploy user), HETZNER_DEPLOY_PATH (optional)."
 echo ""
-echo ">>> Keep $KEY_FILE private and do not commit it."
+if [[ "$KEY_FILE" == "$HOME/.ssh/"* ]]; then
+  echo ">>> Key is in ~/.ssh (outside the repo) — safe from accidental commit."
+else
+  echo ">>> Keep $KEY_FILE private and do not commit it."
+fi

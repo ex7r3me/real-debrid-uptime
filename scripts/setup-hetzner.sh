@@ -3,9 +3,9 @@
 # Run from the repo root (or from anywhere: scripts/setup-hetzner.sh).
 # Requires: sudo (for install, systemd, sudoers).
 #
-# Optional: create a dedicated deploy user and key-based access:
+# Optional: create a dedicated deploy user (script will ask for the username):
 #   CREATE_DEPLOY_USER=1 ./scripts/setup-hetzner.sh
-#   DEPLOY_USER=app CREATE_DEPLOY_USER=1 ./scripts/setup-hetzner.sh
+# Non-interactive: DEPLOY_USER=app CREATE_DEPLOY_USER=1 ./scripts/setup-hetzner.sh
 
 set -e
 
@@ -15,9 +15,18 @@ cd "$REPO_ROOT"
 # --- config (override with env or leave defaults) ---
 PORT="${PORT:-3000}"
 SERVICE_NAME="real-debrid-uptime"
-DEPLOY_USER="${DEPLOY_USER:-deploy}"
 
 if [[ -n "${CREATE_DEPLOY_USER:-}" && "${CREATE_DEPLOY_USER}" != "0" ]]; then
+  if [[ -t 0 && -z "${DEPLOY_USER:-}" ]]; then
+    read -p "Username for the deploy user? [deploy]: " DEPLOY_USER
+    DEPLOY_USER="${DEPLOY_USER:-deploy}"
+  else
+    DEPLOY_USER="${DEPLOY_USER:-deploy}"
+  fi
+  if [[ ! "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+    echo "Invalid username: use lowercase letters, numbers, underscore, hyphen (e.g. deploy, app)."
+    exit 1
+  fi
   APP_USER="$DEPLOY_USER"
 else
   APP_USER="${APP_USER:-$USER}"
@@ -27,7 +36,7 @@ echo "=== Real-Debrid Uptime – Hetzner setup ==="
 echo "Repo root: $REPO_ROOT"
 echo "App user:  $APP_USER"
 echo "Port:      $PORT"
-[[ -n "${CREATE_DEPLOY_USER:-}" && "${CREATE_DEPLOY_USER}" != "0" ]] && echo "Create user: $DEPLOY_USER (dedicated deploy user)"
+[[ -n "${CREATE_DEPLOY_USER:-}" && "${CREATE_DEPLOY_USER}" != "0" ]] && echo "Deploy user: $DEPLOY_USER"
 echo ""
 
 # --- 0. Create deploy user (optional) ---

@@ -61,7 +61,7 @@ Run from the repo root:
 ./scripts/setup-deploy-key.sh
 ```
 
-This creates an Ed25519 key pair (default: `./hetzner_deploy_key` and `./hetzner_deploy_key.pub`) and prints:
+This creates an Ed25519 key pair in **`~/.ssh/hetzner_deploy_real_debrid_uptime`** (outside the repo, so it can’t be committed by mistake). To use a different path: `./scripts/setup-deploy-key.sh /path/to/key`. The script prints:
 
 - The exact line to add the **public** key on the server (for the deploy user’s `~/.ssh/authorized_keys`)
 - How to add the **private** key as the GitHub secret `HETZNER_SSH_KEY`
