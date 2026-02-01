@@ -9,7 +9,7 @@ This project uses **GitHub Actions** for CI (lint + build on every push/PR) and 
 SSH into your server, clone the repo, then run the setup script:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/real-debrid-uptime.git /var/www/real-debrid-uptime
+git clone https://github.com/ex7r3me/real-debrid-uptime.git /var/www/real-debrid-uptime
 cd /var/www/real-debrid-uptime
 ./scripts/setup-hetzner.sh
 ```
@@ -53,7 +53,7 @@ sudo su - app
 
 ```bash
 # As your deploy user (e.g. app or your own user)
-git clone https://github.com/YOUR_USERNAME/real-debrid-uptime.git /var/www/real-debrid-uptime
+git clone https://github.com/ex7r3me/real-debrid-uptime.git /var/www/real-debrid-uptime
 cd /var/www/real-debrid-uptime
 ```
 
