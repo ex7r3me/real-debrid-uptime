@@ -26,6 +26,151 @@ function formatTime(iso: string) {
   });
 }
 
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+export interface Outage {
+  id: string;
+  type: "api" | "stream";
+  streamId?: string;
+  start: string;
+  end: string;
+  durationMs: number;
+}
+
+/** Derive outages from history: consecutive failures for API or each stream. */
+function computeOutages(entries: HistoryEntry[]): Outage[] {
+  const list: Outage[] = [];
+  const sorted = [...entries].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+
+  function addOutage(
+    type: "api" | "stream",
+    streamId: string | undefined,
+    start: string,
+    end: string
+  ) {
+    const startMs = new Date(start).getTime();
+    const endMs = new Date(end).getTime();
+    if (endMs <= startMs) return;
+    list.push({
+      id: `${type}-${streamId ?? "api"}-${start}`,
+      type,
+      streamId,
+      start,
+      end,
+      durationMs: endMs - startMs,
+    });
+  }
+
+  // API outages
+  let apiOutageStart: string | null = null;
+  for (const e of sorted) {
+    const ok = e.api?.success ?? true;
+    if (!ok && !apiOutageStart) apiOutageStart = e.timestamp;
+    if (ok && apiOutageStart) {
+      addOutage("api", undefined, apiOutageStart, e.timestamp);
+      apiOutageStart = null;
+    }
+  }
+  if (apiOutageStart) {
+    const last = sorted[sorted.length - 1];
+    const stillDown = last && last.api?.success === false;
+    const end = stillDown ? new Date().toISOString() : (last?.timestamp ?? apiOutageStart);
+    addOutage("api", undefined, apiOutageStart, end);
+  }
+
+  // Stream outages (per stream)
+  const streamIds = new Set<string>();
+  for (const e of sorted) {
+    if (e.streams) for (const id of Object.keys(e.streams)) streamIds.add(id);
+  }
+  for (const streamId of streamIds) {
+    let start: string | null = null;
+    for (const e of sorted) {
+      const s = e.streams?.[streamId];
+      const ok = s?.success ?? true;
+      if (!ok && !start) start = e.timestamp;
+      if (ok && start) {
+        addOutage("stream", streamId, start, e.timestamp);
+        start = null;
+      }
+    }
+    if (start) {
+      const last = sorted[sorted.length - 1];
+      const stillDown = last && last.streams?.[streamId]?.success === false;
+      const end = stillDown ? new Date().toISOString() : (last?.timestamp ?? start);
+      addOutage("stream", streamId, start, end);
+    }
+  }
+
+  list.sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime());
+  return list.slice(0, 20);
+}
+
+/** Uptime status for a bucket: up, down, or no data. */
+type BucketStatus = "up" | "down" | "none";
+
+export interface UptimeBucket {
+  key: string;
+  label: string;
+  api: BucketStatus;
+  streams: Record<string, BucketStatus>;
+}
+
+/** Build uptime grid: last N hours, one column per hour. Rows = API + stream ids. */
+function buildUptimeGridHours(
+  entries: HistoryEntry[],
+  streamIds: string[],
+  hours: number = 12
+): { rows: { id: string; label: string; type: "api" | "stream" }[]; buckets: UptimeBucket[] } {
+  const now = new Date();
+  const hourMs = 60 * 60 * 1000;
+  const buckets: UptimeBucket[] = [];
+  for (let h = hours - 1; h >= 0; h--) {
+    const hourStart = new Date(now.getTime() - h * hourMs);
+    hourStart.setMinutes(0, 0, 0);
+    const hourEnd = new Date(hourStart.getTime() + hourMs);
+    const hourEntries = entries.filter((e) => {
+      const t = new Date(e.timestamp).getTime();
+      return t >= hourStart.getTime() && t < hourEnd.getTime();
+    });
+    const apiStatus: BucketStatus =
+      hourEntries.some((e) => e.api?.success === false)
+        ? "down"
+        : hourEntries.some((e) => e.api?.success === true)
+          ? "up"
+          : "none";
+    const streams: Record<string, BucketStatus> = {};
+    for (const id of streamIds) {
+      const withStream = hourEntries.filter((e) => e.streams?.[id] != null);
+      streams[id] = withStream.some((e) => e.streams?.[id]?.success === false)
+        ? "down"
+        : withStream.some((e) => e.streams?.[id]?.success === true)
+          ? "up"
+          : "none";
+    }
+    const label = hourStart.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    buckets.push({
+      key: hourStart.toISOString(),
+      label,
+      api: apiStatus,
+      streams,
+    });
+  }
+  const rows = [
+    { id: "api", label: "API", type: "api" as const },
+    ...streamIds.map((id) => ({ id, label: id, type: "stream" as const })),
+  ];
+  return { rows, buckets };
+}
+
 function formatUptime(ms: number) {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
@@ -211,6 +356,83 @@ function HistoryChartAll({
   );
 }
 
+const UPTIME_HOURS = 12;
+
+function UptimeGrid({ entries, streamIds }: { entries: HistoryEntry[]; streamIds: string[] }) {
+  const { rows, buckets } = useMemo(
+    () => buildUptimeGridHours(entries, streamIds, UPTIME_HOURS),
+    [entries, streamIds.join(",")]
+  );
+  if (!buckets.length) return <p className="muted">No history yet.</p>;
+
+  return (
+    <div className="uptime-grid-wrap">
+      <div className="uptime-grid">
+        <div className="uptime-grid-header">
+          <span className="uptime-grid-label" />
+          {buckets.map((b) => (
+            <span key={b.key} className="uptime-grid-hour" title={new Date(b.key).toLocaleString()}>
+              {b.label}
+            </span>
+          ))}
+        </div>
+        {rows.map((row) => (
+          <div key={row.id} className="uptime-grid-row">
+            <span className="uptime-grid-label" title={row.label}>
+              {row.label}
+            </span>
+            <div className="uptime-grid-cells">
+              {buckets.map((b) => {
+                const status = row.type === "api" ? b.api : b.streams[row.id] ?? "none";
+                return (
+                  <span
+                    key={`${row.id}-${b.key}`}
+                    className={`uptime-cell uptime-cell--${status}`}
+                    title={`${row.label} · ${b.label}: ${status === "up" ? "Operational" : status === "down" ? "Outage" : "No data"}`}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="uptime-legend">
+        <span className="uptime-legend-item">
+          <span className="uptime-cell uptime-cell--up" />
+          Operational
+        </span>
+        <span className="uptime-legend-item">
+          <span className="uptime-cell uptime-cell--down" />
+          Outage
+        </span>
+        <span className="uptime-legend-item">
+          <span className="uptime-cell uptime-cell--none" />
+          No data
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function OutagesList({ outages }: { outages: Outage[] }) {
+  if (!outages.length) return <p className="muted">No recorded outages.</p>;
+  return (
+    <ul className="outages-list">
+      {outages.map((o) => (
+        <li key={o.id} className="outage-item">
+          <span className="outage-service">
+            {o.type === "api" ? "API" : o.streamId}
+          </span>
+          <span className="outage-time">
+            {formatDate(o.start)} · {formatTime(o.start)} – {formatTime(o.end)}
+          </span>
+          <span className="outage-duration">{formatUptime(o.durationMs)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default function App() {
   const [current, setCurrent] = useState<HistoryEntry | null>(null);
   const [health, setHealth] = useState<HealthResponse | null>(null);
@@ -261,6 +483,7 @@ export default function App() {
   }, []);
 
   const streamIds = current?.streams ? Object.keys(current.streams) : [];
+  const outages = useMemo(() => computeOutages(historyEntries), [historyEntries]);
 
   if (loading) return <div className="app"><p className="muted">Loading…</p></div>;
 
@@ -268,7 +491,13 @@ export default function App() {
     <div className="app">
       <header>
         <h1>Real-Debrid Uptime</h1>
-        <p className="tagline">Streaming & API health</p>
+        <p className="tagline">API &amp; streaming status</p>
+        <p className="header-desc">
+          Monitor Real-Debrid API health and CDN responsiveness. Data refreshes every 30s.{" "}
+          <a href="https://real-debrid.com" target="_blank" rel="noopener noreferrer" className="header-link">
+            real-debrid.com
+          </a>
+        </p>
       </header>
       {error && (
         <div className="card error-banner">
@@ -285,6 +514,15 @@ export default function App() {
         />
         <Health health={health} />
       </div>
+      <section className="card">
+        <h2>Uptime</h2>
+        <p className="meta">Last {UPTIME_HOURS} hours · green = operational, red = outage, grey = no data</p>
+        <UptimeGrid entries={historyEntries} streamIds={streamIds} />
+      </section>
+      <section className="card">
+        <h2>Latest outages</h2>
+        <OutagesList outages={outages} />
+      </section>
       <section className="card">
         <h2>History — TTFB by stream</h2>
         <HistoryChartAll entries={historyEntries} streamIds={streamIds} />

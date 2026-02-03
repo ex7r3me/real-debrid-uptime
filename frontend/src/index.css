@@ -1,19 +1,52 @@
+/* shadcn / Vercel-inspired design system — dark theme */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
 :root {
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  line-height: 1.5;
+  /* Typography */
+  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.6;
   font-weight: 400;
-  color-scheme: dark;
-  --bg: #0f0f12;
-  --text: #e4e4e7;
-  --muted: #71717a;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Colors — zinc-based dark palette */
+  --bg: #09090b;
+  --bg-elevated: #18181b;
+  --bg-muted: #27272a;
+  --text: #fafafa;
+  --text-muted: #a1a1aa;
   --border: #27272a;
+  --border-subtle: #3f3f46;
+  --ring: #a78bfa;
+
+  /* Surfaces */
   --card-bg: #18181b;
+  --card-border: #27272a;
+
+  /* Accent & status */
   --accent: #a78bfa;
-  --grid: #27272a;
+  --accent-hover: #c4b5fd;
+  --accent-muted: rgba(167, 139, 250, 0.15);
   --ok: #22c55e;
-  --ok-bg: rgba(34, 197, 94, 0.15);
+  --ok-muted: rgba(34, 197, 94, 0.2);
   --fail: #ef4444;
-  --fail-bg: rgba(239, 68, 68, 0.15);
+  --fail-muted: rgba(239, 68, 68, 0.2);
+
+  /* Radius — consistent scale */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+
+  /* Legacy aliases for existing components */
+  --muted: var(--text-muted);
+  --grid: var(--border);
+  --ok-bg: var(--ok-muted);
+  --fail-bg: var(--fail-muted);
 }
 
 * {
@@ -25,7 +58,7 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--text);
-  -webkit-font-smoothing: antialiased;
+  color-scheme: dark;
 }
 
 #root {
